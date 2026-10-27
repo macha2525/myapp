@@ -1,26 +1,52 @@
 @import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --bg: #f6f5f2;
+  --surface: #ffffff;
+  --text: #1d1d22;
+  --muted: #6b6b76;
+  --border: #e4e2dc;
+  --accent: #2b2e36;
+  --accent-fg: #ffffff;
 }
 
+.dark {
+  --bg: #0f1013;
+  --surface: #17181d;
+  --text: #ececf0;
+  --muted: #9a9aa6;
+  --border: #2a2b33;
+  --accent: #d9dbe3;
+  --accent-fg: #0f1013;
+}
+
+/* アクセント色(ライト) */
+[data-accent="indigo"]   { --accent: #3b4a7a; }
+[data-accent="bordeaux"] { --accent: #7a2e3f; }
+[data-accent="moss"]     { --accent: #3f5d4a; }
+[data-accent="amber"]    { --accent: #8a5a14; }
+[data-accent="slate"]    { --accent: #2b2e36; }
+
+/* アクセント色(ダーク) */
+.dark[data-accent="indigo"]   { --accent: #8fa2e8; }
+.dark[data-accent="bordeaux"] { --accent: #e08a9b; }
+.dark[data-accent="moss"]     { --accent: #8fc4a2; }
+.dark[data-accent="amber"]    { --accent: #e6b566; }
+.dark[data-accent="slate"]    { --accent: #d9dbe3; }
+
+/* Tailwindのクラス名として使えるようにする */
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-text: var(--text);
+  --color-muted: var(--muted);
+  --color-border: var(--border);
+  --color-accent: var(--accent);
+  --color-accent-fg: var(--accent-fg);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--bg);
+  color: var(--text);
 }
