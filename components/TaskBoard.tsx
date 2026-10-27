@@ -7,17 +7,27 @@ type Task = {
   title: string;
   note: string | null;
   due_at: string | null;
+  due_has_time: boolean;
   status: 'todo' | 'doing' | 'done';
   created_at: string;
 };
 
-function formatDue(iso: string) {
-  return new Date(iso).toLocaleDateString('ja-JP', {
+function formatDue(iso: string, hasTime: boolean) {
+  const d = new Date(iso);
+  const date = d.toLocaleDateString('ja-JP', {
     month: 'numeric',
     day: 'numeric',
     weekday: 'short',
     timeZone: 'Asia/Tokyo',
   });
+  if (!hasTime) return date;
+  const time = d.toLocaleTimeString('ja-JP', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+    timeZone: 'Asia/Tokyo',
+  });
+  return `${date} ${time}`;
 }
 
 export default function TaskBoard() {
@@ -27,11 +37,12 @@ export default function TaskBoard() {
   const [error, setError] = useState<string | null>(null);
   const [title, setTitle] = useState('');
   const [due, setDue] = useState('');
+  const [dueTime, setDueTime] = useState('');
 
   const load = useCallback(async () => {
     const { data, error } = await supabase
       .from('tasks')
-      .select('id,title,note,due_at,status,created_at')
+      .select('id,title,note,due_at,due_has_time,status,created_at')
       .order('created_at', { ascending: false });
     if (error) {
       setError('読み込みに失敗しました。');
@@ -51,10 +62,16 @@ export default function TaskBoard() {
     const t = title.trim();
     if (!t) return;
 
+    // 日付+時間を選んだ場合はその時刻、日付だけの場合はその日の23:59(日本時間)
+    const hasTime = Boolean(due && dueTime);
+    const dueAt = due
+      ? new Date(`${due}T${hasTime ? dueTime : '23:59'}:00+09:00`).toISOString()
+      : null;
+
     const { error } = await supabase.from('tasks').insert({
       title: t,
-      // 日付だけ選んだ場合は、その日の日本時間23:59を期限にする
-      due_at: due ? new Date(`${due}T23:59:00+09:00`).toISOString() : null,
+      due_at: dueAt,
+      due_has_time: hasTime,
     });
 
     if (error) {
@@ -63,12 +80,12 @@ export default function TaskBoard() {
     }
     setTitle('');
     setDue('');
+    setDueTime('');
     load();
   }
 
   async function toggle(task: Task) {
     const next = task.status === 'done' ? 'todo' : 'done';
-    // 先に画面を更新して、体感を速くする
     setTasks((prev) => prev.map((x) => (x.id === task.id ? { ...x, status: next } : x)));
     const { error } = await supabase.from('tasks').update({ status: next }).eq('id', task.id);
     if (error) {
@@ -98,6 +115,9 @@ export default function TaskBoard() {
     });
   const done = tasks.filter((t) => t.status === 'done');
 
+  const inputClass =
+    'rounded-lg border border-border bg-bg px-3 py-2 text-sm outline-none focus:border-accent';
+
   return (
     <div className="space-y-6">
       <form onSubmit={addTask} className="space-y-3 rounded-xl border border-border bg-surface p-4">
@@ -105,14 +125,24 @@ export default function TaskBoard() {
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           placeholder="やることを入力"
-          className="w-full rounded-lg border border-border bg-bg px-3 py-2 text-sm outline-none focus:border-accent"
+          className={`w-full ${inputClass}`}
         />
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <input
             type="date"
             value={due}
-            onChange={(e) => setDue(e.target.value)}
-            className="flex-1 rounded-lg border border-border bg-bg px-3 py-2 text-sm outline-none focus:border-accent"
+            onChange={(e) => {
+              setDue(e.target.value);
+              if (!e.target.value) setDueTime('');
+            }}
+            className={`min-w-[8rem] flex-1 ${inputClass}`}
+          />
+          <input
+            type="time"
+            value={dueTime}
+            disabled={!due}
+            onChange={(e) => setDueTime(e.target.value)}
+            className={`w-28 ${inputClass} disabled:opacity-40`}
           />
           <button
             type="submit"
@@ -121,6 +151,7 @@ export default function TaskBoard() {
             追加
           </button>
         </div>
+        <p className="text-xs text-muted">時間は空のままでもOK。その場合は、その日いっぱいが期限になるよ。</p>
       </form>
 
       {error && <p className="text-sm text-red-500">{error}</p>}
@@ -153,7 +184,7 @@ export default function TaskBoard() {
                       <p className="truncate text-sm">{t.title}</p>
                       {t.due_at && (
                         <p className={`text-xs ${overdue ? 'text-red-500' : 'text-muted'}`}>
-                          期限 {formatDue(t.due_at)}
+                          期限 {formatDue(t.due_at, t.due_has_time)}
                           {overdue && ' (過ぎています)'}
                         </p>
                       )}
