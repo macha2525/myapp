@@ -37,7 +37,7 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
 
   return (
     <>
-      <div className="mx-auto flex max-w-xl items-center justify-between px-6 pt-4 text-xs text-muted">
+      <div className="mx-auto flex max-w-5xl items-center justify-between px-6 pt-4 text-xs text-muted">
         <span>{email}</span>
         <button onClick={logout} className="underline underline-offset-4 hover:text-text">
           ログアウト
