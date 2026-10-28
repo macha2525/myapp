@@ -1,11 +1,21 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { createContext, useContext, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 
+type AuthInfo = { email: string; logout: () => Promise<void> };
+
+const AuthContext = createContext<AuthInfo | null>(null);
+
+export function useAuth(): AuthInfo {
+  const ctx = useContext(AuthContext);
+  if (!ctx) throw new Error('useAuth は AuthGate の中で使ってね');
+  return ctx;
+}
+
 export default function AuthGate({ children }: { children: React.ReactNode }) {
   const router = useRouter();
-  const [email, setEmail] = useState<string | null>(null);
+  const [email, setEmail] = useState('');
   const [checked, setChecked] = useState(false);
 
   useEffect(() => {
@@ -32,18 +42,12 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
   }
 
   if (!checked) {
-    return <p className="p-6 text-sm text-muted">読み込み中…</p>;
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <p className="font-mono text-xs uppercase tracking-[0.25em] text-muted">Loading</p>
+      </div>
+    );
   }
 
-  return (
-    <>
-      <div className="mx-auto flex max-w-5xl items-center justify-between px-6 pt-4 text-xs text-muted">
-        <span>{email}</span>
-        <button onClick={logout} className="underline underline-offset-4 hover:text-text">
-          ログアウト
-        </button>
-      </div>
-      {children}
-    </>
-  );
+  return <AuthContext.Provider value={{ email, logout }}>{children}</AuthContext.Provider>;
 }
