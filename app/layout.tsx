@@ -1,8 +1,15 @@
+import type { Metadata, Viewport } from 'next';
 import './globals.css';
 
-export const metadata = {
+export const metadata: Metadata = {
   title: 'Life App',
-  description: '生活を便利にする個人用アプリ',
+  description: '生活を、少しだけ整えるためのアプリ。',
+  icons: { apple: '/pwa-icon?size=180' },
+  appleWebApp: { capable: true, title: 'Life App', statusBarStyle: 'default' },
+};
+
+export const viewport: Viewport = {
+  themeColor: '#2b2e36',
 };
 
 const themeScript = `

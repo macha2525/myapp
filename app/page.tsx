@@ -1,5 +1,6 @@
 import AuthGate from '@/components/AuthGate';
 import EventBoard from '@/components/EventBoard';
+import PushSettings from '@/components/PushSettings';
 import RoutineBoard from '@/components/RoutineBoard';
 import TaskBoard from '@/components/TaskBoard';
 import ThemeSwitcher from '@/components/ThemeSwitcher';
@@ -26,6 +27,11 @@ export default function Home() {
         <section className="space-y-3">
           <h2 className="text-lg font-semibold tracking-tight">タスク</h2>
           <TaskBoard />
+        </section>
+
+        <section className="space-y-2">
+          <h2 className="text-sm font-medium text-muted">通知</h2>
+          <PushSettings />
         </section>
 
         <section className="space-y-2">
