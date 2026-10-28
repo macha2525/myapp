@@ -8,22 +8,120 @@ import RoutineBoard from './RoutineBoard';
 import TaskBoard from './TaskBoard';
 import ThemeSwitcher from './ThemeSwitcher';
 
-type ViewId = 'calendar' | 'events' | 'routines' | 'tasks' | 'settings';
+type MainId = 'calendar' | 'events' | 'tasks';
+type MoreId = 'appearance' | 'notifications' | 'account';
+type ViewId = MainId | 'more' | MoreId;
 
-const VIEWS: { id: ViewId; no: string; ja: string; short: string; en: string; wide: boolean }[] = [
+// ── 主なタブ(ここは増やさない方針) ──
+const MAIN = [
   { id: 'calendar', no: '01', ja: 'カレンダー', short: '暦', en: 'Calendar', wide: true },
   { id: 'events', no: '02', ja: '予定', short: '予定', en: 'Schedule', wide: false },
-  { id: 'routines', no: '03', ja: '定期タスク', short: '定期', en: 'Routine', wide: false },
-  { id: 'tasks', no: '04', ja: 'タスク', short: '課題', en: 'Tasks', wide: false },
-  { id: 'settings', no: '05', ja: '設定', short: '設定', en: 'Settings', wide: false },
-];
+  { id: 'tasks', no: '03', ja: 'タスク', short: '課題', en: 'Tasks', wide: false },
+] as const;
+
+// ── 「その他」の中身(カテゴリが増えたら、ここに足す) ──
+const MORE_NO = '04';
+const MORE_ITEMS = [
+  { id: 'appearance', ja: '外観', en: 'Appearance', desc: 'ライト/ダークと、アクセント色' },
+  { id: 'notifications', ja: '通知', en: 'Notifications', desc: 'この端末への通知の許可、テスト送信' },
+  { id: 'account', ja: 'アカウント', en: 'Account', desc: 'ログイン中のメールアドレス、ログアウト' },
+] as const;
+
+const MORE_IDS: string[] = MORE_ITEMS.map((m) => m.id);
+const ALL_IDS: string[] = [...MAIN.map((m) => m.id), 'more', ...MORE_IDS];
 
 const WEEKDAYS = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
 const pad = (n: number) => String(n).padStart(2, '0');
 
-function SectionLabel({ children }: { children: React.ReactNode }) {
+function isMoreView(v: ViewId) {
+  return v === 'more' || MORE_IDS.includes(v);
+}
+
+function metaOf(v: ViewId): { no: string; ja: string; en: string; wide: boolean } {
+  const main = MAIN.find((m) => m.id === v);
+  if (main) return { no: main.no, ja: main.ja, en: main.en, wide: main.wide };
+  if (v === 'more') return { no: MORE_NO, ja: 'その他', en: 'More', wide: false };
+  const idx = MORE_ITEMS.findIndex((m) => m.id === v);
+  const item = MORE_ITEMS[idx];
+  if (!item) return { no: MAIN[0].no, ja: MAIN[0].ja, en: MAIN[0].en, wide: MAIN[0].wide };
+  return { no: `${MORE_NO}.${idx + 1}`, ja: item.ja, en: item.en, wide: false };
+}
+
+function NavRow(props: { no: string; ja: string; en: string; active: boolean; onClick: () => void }) {
   return (
-    <h2 className="font-mono text-[11px] uppercase tracking-[0.22em] text-muted">{children}</h2>
+    <button
+      onClick={props.onClick}
+      className={`group flex w-full items-baseline gap-3 border-l-2 px-5 py-2.5 text-left transition ${
+        props.active ? 'border-accent text-text' : 'border-transparent text-muted hover:text-text'
+      }`}
+    >
+      <span className="font-mono text-[10px] tracking-wider">{props.no}</span>
+      <span className="font-serif text-base">{props.ja}</span>
+      <span className="ml-auto font-serif text-xs italic opacity-0 transition group-hover:opacity-60">
+        {props.en}
+      </span>
+    </button>
+  );
+}
+
+function SubRow(props: { no: string; ja: string; active: boolean; onClick: () => void }) {
+  return (
+    <button
+      onClick={props.onClick}
+      className={`flex w-full items-baseline gap-3 border-l-2 py-1.5 pl-9 pr-5 text-left transition ${
+        props.active ? 'border-accent text-text' : 'border-transparent text-muted hover:text-text'
+      }`}
+    >
+      <span className="font-mono text-[10px] tracking-wider">{props.no}</span>
+      <span className="font-serif text-sm">{props.ja}</span>
+    </button>
+  );
+}
+
+// 「タスク」画面: 通常 / 定期 の切り替え
+function TasksView() {
+  const [mode, setMode] = useState<'normal' | 'routine'>('normal');
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('tasks-mode');
+      if (saved === 'normal' || saved === 'routine') setMode(saved);
+    } catch {}
+  }, []);
+
+  function change(m: 'normal' | 'routine') {
+    setMode(m);
+    try {
+      localStorage.setItem('tasks-mode', m);
+    } catch {}
+  }
+
+  const seg = (active: boolean) =>
+    `flex-1 px-4 py-2 text-sm transition ${
+      active ? 'bg-accent text-accent-fg' : 'text-muted hover:text-text'
+    }`;
+
+  return (
+    <div className="space-y-6">
+      <div className="space-y-2">
+        <div className="flex overflow-hidden rounded-xl border border-border">
+          <button onClick={() => change('normal')} className={seg(mode === 'normal')}>
+            通常
+          </button>
+          <button
+            onClick={() => change('routine')}
+            className={`${seg(mode === 'routine')} border-l border-border`}
+          >
+            定期
+          </button>
+        </div>
+        <p className="font-mono text-[11px] tracking-wide text-muted">
+          {mode === 'normal' ? '期限のある、単発のタスク' : '毎週・毎月くり返す、決まったタスク'}
+        </p>
+      </div>
+
+      {mode === 'normal' ? <TaskBoard /> : <RoutineBoard />}
+    </div>
   );
 }
 
@@ -35,8 +133,7 @@ export default function AppShell() {
   useEffect(() => {
     const read = () => {
       const h = window.location.hash.replace('#', '');
-      const found = VIEWS.find((v) => v.id === h);
-      if (found) setView(found.id);
+      if (ALL_IDS.includes(h)) setView(h as ViewId);
     };
     read();
     window.addEventListener('hashchange', read);
@@ -50,10 +147,17 @@ export default function AppShell() {
   }
 
   const now = new Date();
-  const cur = VIEWS.find((v) => v.id === view) ?? VIEWS[0];
+  const meta = metaOf(view);
+  const moreActive = isMoreView(view);
+  const isSubView = moreActive && view !== 'more';
   const dateLine = `${now.getFullYear()}.${pad(now.getMonth() + 1)}.${pad(now.getDate())} ${
     WEEKDAYS[now.getDay()]
   }`;
+
+  const tabs = [
+    ...MAIN.map((m) => ({ id: m.id as ViewId, no: m.no, short: m.short, active: view === m.id })),
+    { id: 'more' as ViewId, no: MORE_NO, short: 'その他', active: moreActive },
+  ];
 
   return (
     <div className="min-h-screen lg:grid lg:grid-cols-[16rem_minmax(0,1fr)]">
@@ -73,27 +177,38 @@ export default function AppShell() {
           </p>
         </div>
 
-        <nav className="flex-1 py-4">
-          {VIEWS.map((v) => {
-            const active = v.id === view;
-            return (
-              <button
-                key={v.id}
-                onClick={() => go(v.id)}
-                className={`group flex w-full items-baseline gap-3 border-l-2 px-5 py-2.5 text-left transition ${
-                  active
-                    ? 'border-accent text-text'
-                    : 'border-transparent text-muted hover:text-text'
-                }`}
-              >
-                <span className="font-mono text-[10px] tracking-wider">{v.no}</span>
-                <span className="font-serif text-base">{v.ja}</span>
-                <span className="ml-auto font-serif text-xs italic opacity-0 transition group-hover:opacity-60">
-                  {v.en}
-                </span>
-              </button>
-            );
-          })}
+        <nav className="flex-1 overflow-y-auto py-4">
+          {MAIN.map((v) => (
+            <NavRow
+              key={v.id}
+              no={v.no}
+              ja={v.ja}
+              en={v.en}
+              active={view === v.id}
+              onClick={() => go(v.id)}
+            />
+          ))}
+
+          <NavRow
+            no={MORE_NO}
+            ja="その他"
+            en="More"
+            active={moreActive}
+            onClick={() => go('more')}
+          />
+          {moreActive && (
+            <div className="mb-1 mt-0.5">
+              {MORE_ITEMS.map((m, i) => (
+                <SubRow
+                  key={m.id}
+                  no={`${MORE_NO}.${i + 1}`}
+                  ja={m.ja}
+                  active={view === m.id}
+                  onClick={() => go(m.id)}
+                />
+              ))}
+            </div>
+          )}
         </nav>
 
         <div className="space-y-2 border-t border-border px-6 py-4">
@@ -117,68 +232,80 @@ export default function AppShell() {
         </header>
 
         <main className="pb-[calc(5.5rem+env(safe-area-inset-bottom))] lg:pb-0">
-          <div
-            className={`px-5 py-8 lg:px-12 lg:py-12 ${
-              cur.wide ? 'max-w-5xl' : 'max-w-2xl'
-            }`}
-          >
+          <div className={`px-5 py-8 lg:px-12 lg:py-12 ${meta.wide ? 'max-w-5xl' : 'max-w-2xl'}`}>
             <header className="mb-8 border-b border-border pb-4">
+              {isSubView && (
+                <button
+                  onClick={() => go('more')}
+                  className="mb-3 font-mono text-[11px] uppercase tracking-[0.15em] text-muted transition hover:text-text lg:hidden"
+                >
+                  ← More
+                </button>
+              )}
               <p className="font-mono text-[11px] uppercase tracking-[0.22em] text-muted">
-                Nº {cur.no} — {cur.en}
+                Nº {meta.no} — {meta.en}
               </p>
-              <h1 className="mt-2 font-serif text-3xl tracking-tight lg:text-4xl">{cur.ja}</h1>
+              <h1 className="mt-2 font-serif text-3xl tracking-tight lg:text-4xl">{meta.ja}</h1>
             </header>
 
             {view === 'calendar' && <CalendarBoard />}
             {view === 'events' && <EventBoard />}
-            {view === 'routines' && <RoutineBoard />}
-            {view === 'tasks' && <TaskBoard />}
-            {view === 'settings' && (
-              <div className="space-y-10">
-                <section className="space-y-3">
-                  <SectionLabel>Theme / テーマ</SectionLabel>
-                  <ThemeSwitcher />
-                </section>
-                <section className="space-y-3">
-                  <SectionLabel>Notifications / 通知</SectionLabel>
-                  <PushSettings />
-                </section>
-                <section className="space-y-3">
-                  <SectionLabel>Account / アカウント</SectionLabel>
-                  <div className="space-y-3 rounded-xl border border-border bg-surface p-4">
-                    <p className="break-all font-mono text-xs text-muted">{email}</p>
+            {view === 'tasks' && <TasksView />}
+
+            {view === 'more' && (
+              <ul className="border-t border-border">
+                {MORE_ITEMS.map((m, i) => (
+                  <li key={m.id} className="border-b border-border">
                     <button
-                      onClick={logout}
-                      className="rounded-lg border border-border px-4 py-2 text-sm text-muted transition hover:text-text"
+                      onClick={() => go(m.id)}
+                      className="flex w-full items-baseline gap-4 py-4 text-left transition hover:bg-accent/5"
                     >
-                      ログアウト
+                      <span className="font-mono text-[10px] tracking-wider text-muted">
+                        {MORE_NO}.{i + 1}
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block font-serif text-lg">{m.ja}</span>
+                        <span className="block text-xs text-muted">{m.desc}</span>
+                      </span>
+                      <span className="pr-1 font-mono text-xs text-muted">→</span>
                     </button>
-                  </div>
-                </section>
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            {view === 'appearance' && <ThemeSwitcher />}
+            {view === 'notifications' && <PushSettings />}
+            {view === 'account' && (
+              <div className="space-y-3 rounded-xl border border-border bg-surface p-4">
+                <p className="break-all font-mono text-xs text-muted">{email}</p>
+                <button
+                  onClick={logout}
+                  className="rounded-lg border border-border px-4 py-2 text-sm text-muted transition hover:text-text"
+                >
+                  ログアウト
+                </button>
               </div>
             )}
           </div>
         </main>
       </div>
 
-      {/* スマホ: 下のタブバー */}
-      <nav className="fixed inset-x-0 bottom-0 z-20 grid grid-cols-5 border-t border-border bg-bg/95 pb-[env(safe-area-inset-bottom)] backdrop-blur lg:hidden">
-        {VIEWS.map((v) => {
-          const active = v.id === view;
-          return (
-            <button
-              key={v.id}
-              onClick={() => go(v.id)}
-              className={`relative flex flex-col items-center gap-0.5 py-2.5 transition ${
-                active ? 'text-text' : 'text-muted'
-              }`}
-            >
-              {active && <span className="absolute inset-x-5 top-0 h-0.5 bg-accent" />}
-              <span className="font-mono text-[9px] tracking-wider">{v.no}</span>
-              <span className="font-serif text-[13px]">{v.short}</span>
-            </button>
-          );
-        })}
+      {/* スマホ: 下のタブバー(4つ) */}
+      <nav className="fixed inset-x-0 bottom-0 z-20 grid grid-cols-4 border-t border-border bg-bg/95 pb-[env(safe-area-inset-bottom)] backdrop-blur lg:hidden">
+        {tabs.map((t) => (
+          <button
+            key={t.id}
+            onClick={() => go(t.id)}
+            className={`relative flex flex-col items-center gap-0.5 py-2.5 transition ${
+              t.active ? 'text-text' : 'text-muted'
+            }`}
+          >
+            {t.active && <span className="absolute inset-x-6 top-0 h-0.5 bg-accent" />}
+            <span className="font-mono text-[9px] tracking-wider">{t.no}</span>
+            <span className="font-serif text-[13px]">{t.short}</span>
+          </button>
+        ))}
       </nav>
     </div>
   );
