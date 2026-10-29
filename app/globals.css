@@ -85,3 +85,21 @@ body::before {
   opacity: 0.06;
   filter: invert(1);
 }
+
+/* ラベルの6色(顔料の名前)。ライトを基準に決めて、ダークは明るめにしてある */
+:root {
+  --label-1: #9d2a3a; /* Carmine */
+  --label-2: #2c4a8f; /* Ultramarine */
+  --label-3: #2f7566; /* Verdigris */
+  --label-4: #a67a1c; /* Ochre */
+  --label-5: #6a4a87; /* Violet */
+  --label-6: #4b4e57; /* Graphite */
+}
+.dark {
+  --label-1: #e5798a;
+  --label-2: #8da5e8;
+  --label-3: #7cc2ae;
+  --label-4: #e0b455;
+  --label-5: #b79bd6;
+  --label-6: #b4b7c1;
+}

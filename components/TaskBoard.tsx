@@ -3,6 +3,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { jstParts } from '@/lib/calendar';
 import { COPY } from '@/lib/copy';
+import { labelColor, useLabels } from '@/lib/labels';
+import { LabelPicker, LabelTag } from './LabelUI';
 
 type Task = {
   id: string;
@@ -10,6 +12,7 @@ type Task = {
   note: string | null;
   due_at: string | null;
   due_has_time: boolean;
+  label_slot: number | null;
   status: 'todo' | 'doing' | 'done';
   created_at: string;
 };
@@ -71,6 +74,7 @@ function toDueAt(date: string, time: string) {
 
 export default function TaskBoard() {
   const [supabase] = useState(() => createClient());
+  const { nameOf } = useLabels();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -80,6 +84,7 @@ export default function TaskBoard() {
   const [note, setNote] = useState('');
   const [due, setDue] = useState('');
   const [dueTime, setDueTime] = useState('');
+  const [labelSlot, setLabelSlot] = useState<number | null>(null);
 
   // 修正フォーム
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -87,6 +92,7 @@ export default function TaskBoard() {
   const [eNote, setENote] = useState('');
   const [eDue, setEDue] = useState('');
   const [eTime, setETime] = useState('');
+  const [eLabel, setELabel] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
 
   // メモを広げているタスク
@@ -95,7 +101,7 @@ export default function TaskBoard() {
   const load = useCallback(async () => {
     const { data, error } = await supabase
       .from('tasks')
-      .select('id,title,note,due_at,due_has_time,status,created_at')
+      .select('id,title,note,due_at,due_has_time,label_slot,status,created_at')
       .order('created_at', { ascending: false });
     if (error) {
       setError('読み込みに失敗しました。');
@@ -118,6 +124,7 @@ export default function TaskBoard() {
     const { error } = await supabase.from('tasks').insert({
       title: t,
       note: note.trim() || null,
+      label_slot: labelSlot,
       ...toDueAt(due, dueTime),
     });
 
@@ -129,6 +136,7 @@ export default function TaskBoard() {
     setNote('');
     setDue('');
     setDueTime('');
+    setLabelSlot(null);
     load();
   }
 
@@ -139,6 +147,7 @@ export default function TaskBoard() {
     setENote(t.note ?? '');
     setEDue(p ? p.date : '');
     setETime(p && t.due_has_time ? p.time : '');
+    setELabel(t.label_slot ?? null);
     setError(null);
   }
 
@@ -161,6 +170,7 @@ export default function TaskBoard() {
       .update({
         title: t,
         note: eNote.trim() || null,
+        label_slot: eLabel,
         ...toDueAt(eDue, eTime),
       })
       .eq('id', editingId);
@@ -223,6 +233,7 @@ export default function TaskBoard() {
     return (
       <li
         key={t.id}
+        style={t.label_slot ? { borderLeft: `3px solid ${labelColor(t.label_slot)}` } : undefined}
         className={`rounded-xl border border-border bg-surface px-4 py-3 ${
           isDone && !editing ? 'opacity-60' : ''
         }`}
@@ -241,6 +252,7 @@ export default function TaskBoard() {
               placeholder={COPY.tasks.notePlaceholder}
               className={`w-full resize-y leading-relaxed ${inputClass}`}
             />
+            <LabelPicker value={eLabel} onChange={setELabel} nameOf={nameOf} />
             <div className="flex flex-wrap items-center gap-2">
               <input
                 type="date"
@@ -304,11 +316,16 @@ export default function TaskBoard() {
               </button>
               <div className="min-w-0 flex-1">
                 <p className={`break-words text-sm ${isDone ? 'line-through' : ''}`}>{t.title}</p>
-                {t.due_at && (
-                  <p className={`text-xs ${overdue ? 'text-red-500' : 'text-muted'}`}>
-                    期限 {formatDue(t.due_at, t.due_has_time)}
-                    {overdue && ' (過ぎています)'}
-                  </p>
+                {(t.due_at || t.label_slot) && (
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5">
+                    {t.due_at && (
+                      <p className={`text-xs ${overdue ? 'text-red-500' : 'text-muted'}`}>
+                        期限 {formatDue(t.due_at, t.due_has_time)}
+                        {overdue && ' (過ぎています)'}
+                      </p>
+                    )}
+                    {t.label_slot && <LabelTag slot={t.label_slot} name={nameOf(t.label_slot)} />}
+                  </div>
                 )}
               </div>
               <button onClick={() => startEdit(t)} className={linkBtn}>
@@ -352,6 +369,7 @@ export default function TaskBoard() {
           placeholder={COPY.tasks.notePlaceholder}
           className={`w-full resize-y leading-relaxed ${inputClass}`}
         />
+        <LabelPicker value={labelSlot} onChange={setLabelSlot} nameOf={nameOf} />
         <div className="flex flex-wrap items-center gap-2">
           <input
             type="date"

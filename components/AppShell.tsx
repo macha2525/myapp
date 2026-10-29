@@ -3,13 +3,15 @@ import { useEffect, useState } from 'react';
 import { useAuth } from './AuthGate';
 import CalendarBoard from './CalendarBoard';
 import EventBoard from './EventBoard';
+import LabelsBoard from './LabelsBoard';
 import PushSettings from './PushSettings';
 import RoutineBoard from './RoutineBoard';
 import TaskBoard from './TaskBoard';
 import ThemeSwitcher from './ThemeSwitcher';
+import { COPY } from '@/lib/copy';
 
 type MainId = 'calendar' | 'events' | 'tasks';
-type MoreId = 'appearance' | 'notifications' | 'account';
+type MoreId = 'appearance' | 'labels' | 'notifications' | 'account';
 type ViewId = MainId | 'more' | MoreId;
 
 // ── 主なタブ(ここは増やさない方針) ──
@@ -23,6 +25,7 @@ const MAIN = [
 const MORE_NO = '04';
 const MORE_ITEMS = [
   { id: 'appearance', en: 'Appearance', desc: 'ライト/ダークと、アクセント色' },
+  { id: 'labels', en: 'Labels', desc: '予定やタスクの色分けと、ラベルの名前' },
   { id: 'notifications', en: 'Notifications', desc: 'この端末への通知の許可、テスト送信' },
   { id: 'account', en: 'Account', desc: 'ログイン中のメールアドレス、ログアウト' },
 ] as const;
@@ -230,7 +233,17 @@ export default function AppShell() {
                 </button>
               )}
               <p className="font-mono text-[11px] tracking-[0.22em] text-muted">Nº {meta.no}</p>
-              <h1 className="mt-2 font-serif text-4xl tracking-tight lg:text-5xl">{meta.en}</h1>
+              <div className="mt-2 flex items-end justify-between gap-4">
+                <h1 className="font-serif text-4xl tracking-tight lg:text-5xl">{meta.en}</h1>
+                {(view === 'events' || view === 'tasks') && (
+                  <button
+                    onClick={() => go('labels')}
+                    className="shrink-0 pb-1 text-xs text-muted underline underline-offset-4 transition hover:text-text"
+                  >
+                    {COPY.labels.openLink}
+                  </button>
+                )}
+              </div>
             </header>
 
             {view === 'calendar' && <CalendarBoard />}
@@ -257,6 +270,7 @@ export default function AppShell() {
             )}
 
             {view === 'appearance' && <ThemeSwitcher />}
+            {view === 'labels' && <LabelsBoard />}
             {view === 'notifications' && <PushSettings />}
             {view === 'account' && (
               <div className="space-y-3 rounded-xl border border-border bg-surface p-4">
