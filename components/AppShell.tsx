@@ -14,17 +14,17 @@ type ViewId = MainId | 'more' | MoreId;
 
 // ── 主なタブ(ここは増やさない方針) ──
 const MAIN = [
-  { id: 'calendar', no: '01', ja: 'カレンダー', short: '暦', en: 'Calendar', wide: true },
-  { id: 'events', no: '02', ja: '予定', short: '予定', en: 'Schedule', wide: false },
-  { id: 'tasks', no: '03', ja: 'タスク', short: '課題', en: 'Tasks', wide: false },
+  { id: 'calendar', no: '01', en: 'Calendar', wide: true },
+  { id: 'events', no: '02', en: 'Schedule', wide: false },
+  { id: 'tasks', no: '03', en: 'Tasks', wide: false },
 ] as const;
 
 // ── 「その他」の中身(カテゴリが増えたら、ここに足す) ──
 const MORE_NO = '04';
 const MORE_ITEMS = [
-  { id: 'appearance', ja: '外観', en: 'Appearance', desc: 'ライト/ダークと、アクセント色' },
-  { id: 'notifications', ja: '通知', en: 'Notifications', desc: 'この端末への通知の許可、テスト送信' },
-  { id: 'account', ja: 'アカウント', en: 'Account', desc: 'ログイン中のメールアドレス、ログアウト' },
+  { id: 'appearance', en: 'Appearance', desc: 'ライト/ダークと、アクセント色' },
+  { id: 'notifications', en: 'Notifications', desc: 'この端末への通知の許可、テスト送信' },
+  { id: 'account', en: 'Account', desc: 'ログイン中のメールアドレス、ログアウト' },
 ] as const;
 
 const MORE_IDS: string[] = MORE_ITEMS.map((m) => m.id);
@@ -37,43 +37,38 @@ function isMoreView(v: ViewId) {
   return v === 'more' || MORE_IDS.includes(v);
 }
 
-function metaOf(v: ViewId): { no: string; ja: string; en: string; wide: boolean } {
+function metaOf(v: ViewId): { no: string; en: string; wide: boolean } {
   const main = MAIN.find((m) => m.id === v);
-  if (main) return { no: main.no, ja: main.ja, en: main.en, wide: main.wide };
-  if (v === 'more') return { no: MORE_NO, ja: 'その他', en: 'More', wide: false };
-  const idx = MORE_ITEMS.findIndex((m) => m.id === v);
-  const item = MORE_ITEMS[idx];
-  if (!item) return { no: MAIN[0].no, ja: MAIN[0].ja, en: MAIN[0].en, wide: MAIN[0].wide };
-  return { no: `${MORE_NO}.${idx + 1}`, ja: item.ja, en: item.en, wide: false };
+  if (main) return { no: main.no, en: main.en, wide: main.wide };
+  if (v === 'more') return { no: MORE_NO, en: 'More', wide: false };
+  const item = MORE_ITEMS.find((m) => m.id === v);
+  if (item) return { no: MORE_NO, en: item.en, wide: false };
+  return { no: MAIN[0].no, en: MAIN[0].en, wide: MAIN[0].wide };
 }
 
-function NavRow(props: { no: string; ja: string; en: string; active: boolean; onClick: () => void }) {
+function NavRow(props: { no: string; label: string; active: boolean; onClick: () => void }) {
   return (
     <button
       onClick={props.onClick}
-      className={`group flex w-full items-baseline gap-3 border-l-2 px-5 py-2.5 text-left transition ${
+      className={`flex w-full items-baseline gap-3 border-l-2 px-5 py-2.5 text-left transition ${
         props.active ? 'border-accent text-text' : 'border-transparent text-muted hover:text-text'
       }`}
     >
       <span className="font-mono text-[10px] tracking-wider">{props.no}</span>
-      <span className="font-serif text-base">{props.ja}</span>
-      <span className="ml-auto font-serif text-xs italic opacity-0 transition group-hover:opacity-60">
-        {props.en}
-      </span>
+      <span className="font-serif text-lg">{props.label}</span>
     </button>
   );
 }
 
-function SubRow(props: { no: string; ja: string; active: boolean; onClick: () => void }) {
+function SubRow(props: { label: string; active: boolean; onClick: () => void }) {
   return (
     <button
       onClick={props.onClick}
-      className={`flex w-full items-baseline gap-3 border-l-2 py-1.5 pl-9 pr-5 text-left transition ${
+      className={`flex w-full items-baseline border-l-2 py-1.5 pl-11 pr-5 text-left transition ${
         props.active ? 'border-accent text-text' : 'border-transparent text-muted hover:text-text'
       }`}
     >
-      <span className="font-mono text-[10px] tracking-wider">{props.no}</span>
-      <span className="font-serif text-sm">{props.ja}</span>
+      <span className="font-serif text-base">{props.label}</span>
     </button>
   );
 }
@@ -155,8 +150,8 @@ export default function AppShell() {
   }`;
 
   const tabs = [
-    ...MAIN.map((m) => ({ id: m.id as ViewId, no: m.no, short: m.short, active: view === m.id })),
-    { id: 'more' as ViewId, no: MORE_NO, short: 'その他', active: moreActive },
+    ...MAIN.map((m) => ({ id: m.id as ViewId, no: m.no, label: m.en, active: view === m.id })),
+    { id: 'more' as ViewId, no: MORE_NO, label: 'More', active: moreActive },
   ];
 
   return (
@@ -182,27 +177,19 @@ export default function AppShell() {
             <NavRow
               key={v.id}
               no={v.no}
-              ja={v.ja}
-              en={v.en}
+              label={v.en}
               active={view === v.id}
               onClick={() => go(v.id)}
             />
           ))}
 
-          <NavRow
-            no={MORE_NO}
-            ja="その他"
-            en="More"
-            active={moreActive}
-            onClick={() => go('more')}
-          />
+          <NavRow no={MORE_NO} label="More" active={moreActive} onClick={() => go('more')} />
           {moreActive && (
             <div className="mb-1 mt-0.5">
-              {MORE_ITEMS.map((m, i) => (
+              {MORE_ITEMS.map((m) => (
                 <SubRow
                   key={m.id}
-                  no={`${MORE_NO}.${i + 1}`}
-                  ja={m.ja}
+                  label={m.en}
                   active={view === m.id}
                   onClick={() => go(m.id)}
                 />
@@ -242,10 +229,8 @@ export default function AppShell() {
                   ← More
                 </button>
               )}
-              <p className="font-mono text-[11px] uppercase tracking-[0.22em] text-muted">
-                Nº {meta.no} — {meta.en}
-              </p>
-              <h1 className="mt-2 font-serif text-3xl tracking-tight lg:text-4xl">{meta.ja}</h1>
+              <p className="font-mono text-[11px] tracking-[0.22em] text-muted">Nº {meta.no}</p>
+              <h1 className="mt-2 font-serif text-4xl tracking-tight lg:text-5xl">{meta.en}</h1>
             </header>
 
             {view === 'calendar' && <CalendarBoard />}
@@ -254,20 +239,17 @@ export default function AppShell() {
 
             {view === 'more' && (
               <ul className="border-t border-border">
-                {MORE_ITEMS.map((m, i) => (
+                {MORE_ITEMS.map((m) => (
                   <li key={m.id} className="border-b border-border">
                     <button
                       onClick={() => go(m.id)}
-                      className="flex w-full items-baseline gap-4 py-4 text-left transition hover:bg-accent/5"
+                      className="flex w-full items-baseline gap-4 px-1 py-4 text-left transition hover:bg-accent/5"
                     >
-                      <span className="font-mono text-[10px] tracking-wider text-muted">
-                        {MORE_NO}.{i + 1}
-                      </span>
                       <span className="min-w-0 flex-1">
-                        <span className="block font-serif text-lg">{m.ja}</span>
+                        <span className="block font-serif text-xl">{m.en}</span>
                         <span className="block text-xs text-muted">{m.desc}</span>
                       </span>
-                      <span className="pr-1 font-mono text-xs text-muted">→</span>
+                      <span className="font-mono text-xs text-muted">→</span>
                     </button>
                   </li>
                 ))}
@@ -303,7 +285,7 @@ export default function AppShell() {
           >
             {t.active && <span className="absolute inset-x-6 top-0 h-0.5 bg-accent" />}
             <span className="font-mono text-[9px] tracking-wider">{t.no}</span>
-            <span className="font-serif text-[13px]">{t.short}</span>
+            <span className="font-serif text-[15px]">{t.label}</span>
           </button>
         ))}
       </nav>

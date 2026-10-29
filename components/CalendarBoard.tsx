@@ -13,6 +13,7 @@ import {
   startOfWeekSun,
   toMin,
 } from '@/lib/calendar';
+import { holidayName } from '@/lib/holidays';
 
 type TaskRow = {
   id: string;
@@ -111,10 +112,16 @@ function chip(active: boolean) {
   }`;
 }
 
+// 曜日の色(日曜は赤、土曜は青)
 function weekdayColor(dow: number) {
   if (dow === 0) return 'text-red-500/80';
   if (dow === 6) return 'text-sky-500/80';
   return 'text-muted';
+}
+
+// 日付の色(祝日は日曜と同じ赤)
+function dayColor(d: Date, holiday?: string) {
+  return holiday ? 'text-red-500/80' : weekdayColor(d.getDay());
 }
 
 export default function CalendarBoard() {
@@ -303,6 +310,7 @@ export default function CalendarBoard() {
         }/${days[6].getDate()}`;
 
   const selectedDate = parseYmd(selected);
+  const selectedHoliday = holidayName(selected);
   const selectedItems = byDate.get(selected) ?? [];
   const groups = (['schedule', 'task', 'routine'] as const)
     .map((t) => ({ type: t, list: selectedItems.filter((i) => i.type === t) }))
@@ -327,7 +335,7 @@ export default function CalendarBoard() {
 
       {/* 操作バー */}
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={() => move(-1)}
             aria-label="前へ"
@@ -335,7 +343,15 @@ export default function CalendarBoard() {
           >
             ‹
           </button>
-          <h3 className="min-w-[9rem] text-center text-base font-semibold tracking-tight">{title}</h3>
+          <h3
+            className={`text-center font-serif font-medium tracking-tight ${
+              view === 'month'
+                ? 'min-w-[9.5rem] text-3xl sm:min-w-[13rem] sm:text-4xl'
+                : 'text-xl sm:text-3xl'
+            }`}
+          >
+            {title}
+          </h3>
           <button
             onClick={() => move(1)}
             aria-label="次へ"
@@ -378,7 +394,7 @@ export default function CalendarBoard() {
 
       {/* 月表示 */}
       {view === 'month' && (
-        <div className="overflow-hidden rounded-xl border border-border bg-surface">
+        <div className="overflow-hidden rounded-xl border border-border bg-surface/40">
           <div className="grid grid-cols-7 border-b border-border text-center text-xs">
             {SUN_LABELS.map((w, i) => (
               <div key={w} className={`py-2 ${weekdayColor(i)}`}>
@@ -390,6 +406,7 @@ export default function CalendarBoard() {
             {days.map((d) => {
               const ds = ymd(d);
               const list = byDate.get(ds) ?? [];
+              const hol = holidayName(ds);
               const inMonth = d.getMonth() === anchor.getMonth();
               const isToday = ds === todayStr;
               const isSel = ds === selected;
@@ -397,20 +414,28 @@ export default function CalendarBoard() {
                 <button
                   key={ds}
                   onClick={() => setSelected(ds)}
-                  className={`min-h-[4.25rem] border-b border-r border-border p-1 text-left align-top transition sm:min-h-[6.5rem] sm:p-1.5 [&:nth-child(7n)]:border-r-0 ${
+                  className={`flex min-h-[4.25rem] flex-col items-stretch border-b border-r border-border p-1 transition sm:min-h-[6.5rem] sm:p-1.5 [&:nth-child(7n)]:border-r-0 ${
                     inMonth ? '' : 'opacity-40'
                   } ${isSel ? 'bg-accent/10' : 'hover:bg-accent/5'}`}
                 >
+                  {/* 日付は、枠の上の中央 */}
                   <span
-                    className={`inline-flex h-6 w-6 items-center justify-center rounded-full text-xs ${
-                      isToday ? 'bg-accent text-accent-fg' : weekdayColor(d.getDay())
+                    className={`inline-flex h-6 w-6 items-center justify-center self-center rounded-full text-xs ${
+                      isToday ? 'bg-accent text-accent-fg' : dayColor(d, hol)
                     }`}
                   >
                     {d.getDate()}
                   </span>
 
+                  {/* PC: 祝日名 */}
+                  {hol && (
+                    <span className="mt-0.5 hidden truncate text-center text-[10px] leading-tight text-red-500/80 sm:block">
+                      {hol}
+                    </span>
+                  )}
+
                   {/* スマホ: 点で表示 */}
-                  <div className="mt-1 flex flex-wrap gap-0.5 sm:hidden">
+                  <div className="mt-1 flex flex-wrap justify-center gap-0.5 sm:hidden">
                     {list.slice(0, 6).map((it) => (
                       <span
                         key={it.key}
@@ -422,7 +447,7 @@ export default function CalendarBoard() {
                   </div>
 
                   {/* PC: 題名つきで表示 */}
-                  <div className="mt-1 hidden space-y-0.5 sm:block">
+                  <div className="mt-1 hidden w-full space-y-0.5 text-left sm:block">
                     {list.slice(0, 3).map((it) => (
                       <div
                         key={it.key}
@@ -447,13 +472,14 @@ export default function CalendarBoard() {
 
       {/* 週表示 */}
       {view === 'week' && (
-        <div className="overflow-x-auto rounded-xl border border-border bg-surface">
+        <div className="overflow-x-auto rounded-xl border border-border bg-surface/40">
           <div className="min-w-[640px]">
             {/* 曜日と日付 */}
             <div className={`${gridCols} border-b border-border`}>
               <div />
               {days.map((d) => {
                 const ds = ymd(d);
+                const hol = holidayName(ds);
                 const isToday = ds === todayStr;
                 return (
                   <button
@@ -463,15 +489,24 @@ export default function CalendarBoard() {
                       ds === selected ? 'bg-accent/10' : 'hover:bg-accent/5'
                     }`}
                   >
-                    <span className={`block text-[10px] ${weekdayColor(d.getDay())}`}>
+                    <span className={`block text-[10px] ${dayColor(d, hol)}`}>
                       {SUN_LABELS[d.getDay()]}
                     </span>
                     <span
                       className={`mt-0.5 inline-flex h-6 w-6 items-center justify-center rounded-full text-sm ${
-                        isToday ? 'bg-accent text-accent-fg' : ''
+                        isToday
+                          ? 'bg-accent text-accent-fg'
+                          : hol || d.getDay() === 0
+                            ? 'text-red-500/80'
+                            : d.getDay() === 6
+                              ? 'text-sky-500/80'
+                              : ''
                       }`}
                     >
                       {d.getDate()}
+                    </span>
+                    <span className="block h-3 truncate px-0.5 text-[9px] leading-3 text-red-500/80">
+                      {hol ?? ''}
                     </span>
                   </button>
                 );
@@ -564,9 +599,12 @@ export default function CalendarBoard() {
 
       {/* 選んだ日の詳細 */}
       <section className="space-y-3">
-        <h3 className="text-sm font-medium text-muted">
-          {selectedDate.getMonth() + 1}月{selectedDate.getDate()}日({SUN_LABELS[selectedDate.getDay()]})
-          {selected === todayStr && ' ・今日'}
+        <h3 className="flex flex-wrap items-baseline gap-x-2 text-sm font-medium text-muted">
+          <span>
+            {selectedDate.getMonth() + 1}月{selectedDate.getDate()}日({SUN_LABELS[selectedDate.getDay()]})
+          </span>
+          {selected === todayStr && <span>・今日</span>}
+          {selectedHoliday && <span className="text-red-500/80">・{selectedHoliday}</span>}
         </h3>
 
         {groups.length === 0 && (
@@ -582,7 +620,7 @@ export default function CalendarBoard() {
               {g.list.map((it) => (
                 <li
                   key={it.key}
-                  className="flex items-center gap-3 rounded-xl border border-border bg-surface px-4 py-2.5"
+                  className="flex items-center gap-3 rounded-xl border border-border bg-surface/40 px-4 py-2.5"
                 >
                   <span className={`h-2 w-2 shrink-0 rounded-full ${TYPE_STYLE[it.type].dot}`} />
                   <span className="w-24 shrink-0 text-xs tabular-nums text-muted">{timeText(it)}</span>
