@@ -6,7 +6,6 @@ const FONTS_URL =
   '?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500' +
   '&family=IBM+Plex+Mono:wght@400;500' +
   '&family=Shippori+Mincho:wght@400;500;600' +
-  '&family=Zen+Kaku+Gothic+New:wght@400;500;700' +
   '&display=swap';
 
 export const metadata: Metadata = {

@@ -10,6 +10,7 @@ import {
   ymd,
 } from '@/lib/routine';
 import RoutineForm from './RoutineForm';
+import { COPY } from '@/lib/copy';
 
 type Log = { routine_id: string; log_date: string };
 
@@ -124,7 +125,7 @@ export default function RoutineBoard() {
         </h3>
         {todays.length === 0 ? (
           <p className="rounded-xl border border-dashed border-border p-4 text-sm text-muted">
-            今日の定期タスクはありません。
+                        {COPY.routines.emptyToday}
           </p>
         ) : (
           <ul className="space-y-2">
@@ -180,7 +181,7 @@ export default function RoutineBoard() {
 
         {active.length === 0 && (
           <p className="rounded-xl border border-dashed border-border p-4 text-sm text-muted">
-            まだ定期タスクがありません。下のボタンから追加してね。
+                        {COPY.routines.emptyAll}
           </p>
         )}
 

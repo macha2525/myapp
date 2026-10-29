@@ -54,15 +54,16 @@
   --color-accent: var(--accent);
   --color-accent-fg: var(--accent-fg);
 
-   --font-sans: "Zen Kaku Gothic New", system-ui, sans-serif;
+  --font-sans: "Shippori Mincho", "Cormorant Garamond", serif;
   --font-serif: "Cormorant Garamond", "Shippori Mincho", serif;
-  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+  --font-mono: "IBM Plex Mono", "Shippori Mincho", ui-monospace, monospace;
 }
 
 body {
   background: var(--bg);
   color: var(--text);
-    font-family: "Zen Kaku Gothic New", system-ui, sans-serif;
+  font-family: "Shippori Mincho", "Cormorant Garamond", serif;
+  font-weight: 500;
 }
 
 ::selection {
