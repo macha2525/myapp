@@ -14,17 +14,24 @@ import {
   toMin,
 } from '@/lib/calendar';
 import { holidayName } from '@/lib/holidays';
+import { COPY } from '@/lib/copy';
+import { labelColor, useLabels } from '@/lib/labels';
+import { LabelSwatch } from './LabelUI';
 
 type TaskRow = {
   id: string;
   title: string;
   due_at: string | null;
   due_has_time: boolean;
+  label_slot: number | null;
   status: 'todo' | 'doing' | 'done';
 };
+type ScheduleRow = Schedule & { label_slot: number | null };
+type RoutineRow = Routine & { label_slot: number | null };
+type Item = CalItem & { labelSlot?: number | null };
 type Log = { routine_id: string; log_date: string };
 type View = 'month' | 'week';
-type Block = CalItem & { startMin: number; endMin: number; lane: number; lanes: number };
+type Block = Item & { startMin: number; endMin: number; lane: number; lanes: number };
 
 // 週表示の時間軸(7:00〜23:00)と、1時間あたりの高さ(px)
 const START_H = 7;
@@ -33,18 +40,35 @@ const HOUR_H = 44;
 
 const TYPE_ORDER = { schedule: 0, task: 1, routine: 2 } as const;
 const TYPE_STYLE = {
-  schedule: { dot: 'bg-accent', chip: 'bg-accent/15 text-text border-accent', label: '予定' },
-  task: { dot: 'bg-amber-500', chip: 'bg-amber-500/15 text-text border-amber-500', label: 'タスク期限' },
-  routine: { dot: 'bg-muted', chip: 'bg-muted/15 text-text border-muted', label: '定期タスク' },
+  schedule: { dot: 'bg-accent', label: '予定' },
+  task: { dot: 'bg-amber-500', label: 'タスク期限' },
+  routine: { dot: 'bg-muted', label: '定期タスク' },
 } as const;
 
-function compare(a: CalItem, b: CalItem) {
+// ラベルがないときの色(種類ごと)
+const FALLBACK_COLOR = {
+  schedule: 'var(--accent)',
+  task: '#f59e0b',
+  routine: 'var(--muted)',
+} as const;
+
+function colorOf(it: Item): string {
+  return it.labelSlot ? labelColor(it.labelSlot) : FALLBACK_COLOR[it.type];
+}
+
+// 左に色の線、背景にごく薄い同じ色
+function chipStyle(it: Item): React.CSSProperties {
+  const c = colorOf(it);
+  return { borderLeftColor: c, backgroundColor: `color-mix(in srgb, ${c} 14%, transparent)` };
+}
+
+function compare(a: Item, b: Item) {
   if (a.type !== b.type) return TYPE_ORDER[a.type] - TYPE_ORDER[b.type];
   if (a.allDay !== b.allDay) return a.allDay ? 1 : -1;
   return (a.start ?? '').localeCompare(b.start ?? '');
 }
 
-function timeText(it: CalItem) {
+function timeText(it: Item) {
   if (it.start) {
     if (it.type === 'task') return `${it.start} まで`;
     return it.end ? `${it.start}〜${it.end}` : `${it.start}〜`;
@@ -55,8 +79,8 @@ function timeText(it: CalItem) {
 }
 
 // 1日分の予定を、時間軸に置くブロックと、置けないもの(終日など)に分ける
-function layoutDay(items: CalItem[]): { blocks: Block[]; loose: CalItem[] } {
-  const loose: CalItem[] = [];
+function layoutDay(items: Item[]): { blocks: Block[]; loose: Item[] } {
+  const loose: Item[] = [];
   const blocks: Block[] = [];
 
   for (const it of items) {
@@ -126,6 +150,7 @@ function dayColor(d: Date, holiday?: string) {
 
 export default function CalendarBoard() {
   const [supabase] = useState(() => createClient());
+  const { nameOf } = useLabels();
 
   const today = useMemo(() => {
     const n = new Date();
@@ -137,10 +162,10 @@ export default function CalendarBoard() {
   const [anchor, setAnchor] = useState<Date>(today);
   const [selected, setSelected] = useState<string>(todayStr);
 
-  const [schedules, setSchedules] = useState<Schedule[]>([]);
+  const [schedules, setSchedules] = useState<ScheduleRow[]>([]);
   const [exceptions, setExceptions] = useState<ScheduleException[]>([]);
   const [tasks, setTasks] = useState<TaskRow[]>([]);
-  const [routines, setRoutines] = useState<Routine[]>([]);
+  const [routines, setRoutines] = useState<RoutineRow[]>([]);
   const [logs, setLogs] = useState<Log[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -158,22 +183,24 @@ export default function CalendarBoard() {
     const [s, e, t, r] = await Promise.all([
       supabase
         .from('schedules')
-        .select('id,title,location,kind,all_day,start_date,end_date,weekdays,start_time,end_time'),
+        .select('id,title,location,kind,all_day,start_date,end_date,weekdays,start_time,end_time,label_slot'),
       supabase
         .from('schedule_exceptions')
         .select('schedule_id,occurrence_date,kind,new_start_time,new_end_time,new_location'),
-      supabase.from('tasks').select('id,title,due_at,due_has_time,status'),
+      supabase.from('tasks').select('id,title,due_at,due_has_time,label_slot,status'),
       supabase
         .from('routine_tasks')
-        .select('id,title,recurrence,weekdays,month_mode,month_days,nth_week,clamp_to_month_end,is_active'),
+        .select(
+          'id,title,recurrence,weekdays,month_mode,month_days,nth_week,clamp_to_month_end,is_active,label_slot'
+        ),
     ]);
     if (s.error || e.error || t.error || r.error) {
       setError('カレンダーのデータの読み込みに失敗しました。');
     } else {
-      setSchedules(s.data as Schedule[]);
+      setSchedules(s.data as ScheduleRow[]);
       setExceptions(e.data as ScheduleException[]);
       setTasks(t.data as TaskRow[]);
-      setRoutines(r.data as Routine[]);
+      setRoutines(r.data as RoutineRow[]);
       setError(null);
     }
     setLoading(false);
@@ -208,14 +235,15 @@ export default function CalendarBoard() {
 
   // 日付ごとに、全部の種類の予定をまとめる
   const byDate = useMemo(() => {
-    const map = new Map<string, CalItem[]>();
-    const push = (it: CalItem) => {
+    const map = new Map<string, Item[]>();
+    const push = (it: Item) => {
       const list = map.get(it.date);
       if (list) list.push(it);
       else map.set(it.date, [it]);
     };
     const nowMs = Date.now();
     const doneSet = new Set(logs.map((l) => `${l.routine_id}_${l.log_date}`));
+    const slotBySchedule = new Map(schedules.map((s) => [s.id, s.label_slot] as const));
 
     occurrencesInRange(schedules, exceptions, days[0], days[days.length - 1]).forEach((o) => {
       const timed = !o.allDay && !!o.start;
@@ -229,6 +257,7 @@ export default function CalendarBoard() {
         allDay: !timed,
         cancelled: o.cancelled,
         location: o.location,
+        labelSlot: slotBySchedule.get(o.scheduleId) ?? null,
       });
     });
 
@@ -247,6 +276,7 @@ export default function CalendarBoard() {
         allDay: !t.due_has_time,
         done,
         overdue: !done && new Date(t.due_at).getTime() < nowMs,
+        labelSlot: t.label_slot,
       });
     });
 
@@ -265,6 +295,7 @@ export default function CalendarBoard() {
             end: null,
             allDay: true,
             done: doneSet.has(`${r.id}_${ds}`),
+            labelSlot: r.label_slot,
           });
         });
       });
@@ -272,6 +303,17 @@ export default function CalendarBoard() {
     map.forEach((list) => list.sort(compare));
     return map;
   }, [schedules, exceptions, tasks, routines, logs, days, rangeFrom, rangeTo]);
+
+  // いま表示している範囲で使われているラベル(凡例用)
+  const usedSlots = useMemo(() => {
+    const set = new Set<number>();
+    byDate.forEach((list) =>
+      list.forEach((it) => {
+        if (it.labelSlot) set.add(it.labelSlot);
+      })
+    );
+    return [...set].sort((a, b) => a - b);
+  }, [byDate]);
 
   function move(delta: number) {
     if (view === 'month') {
@@ -383,13 +425,26 @@ export default function CalendarBoard() {
       </div>
 
       {/* 凡例 */}
-      <div className="flex flex-wrap gap-4 text-xs text-muted">
-        {(['schedule', 'task', 'routine'] as const).map((t) => (
-          <span key={t} className="flex items-center gap-1.5">
-            <span className={`h-2 w-2 rounded-full ${TYPE_STYLE[t].dot}`} />
-            {TYPE_STYLE[t].label}
-          </span>
-        ))}
+      <div className="space-y-1.5 text-xs text-muted">
+        {usedSlots.length > 0 && (
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
+            {usedSlots.map((s) => (
+              <span key={s} className="flex items-center gap-1.5">
+                <LabelSwatch slot={s} size={12} />
+                {nameOf(s)}
+              </span>
+            ))}
+          </div>
+        )}
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
+          <span>{COPY.labels.noLabel}</span>
+          {(['schedule', 'task', 'routine'] as const).map((t) => (
+            <span key={t} className="flex items-center gap-1.5">
+              <span className={`h-2 w-2 rounded-full ${TYPE_STYLE[t].dot}`} />
+              {TYPE_STYLE[t].label}
+            </span>
+          ))}
+        </div>
       </div>
 
       {/* 月表示 */}
@@ -439,9 +494,8 @@ export default function CalendarBoard() {
                     {list.slice(0, 6).map((it) => (
                       <span
                         key={it.key}
-                        className={`h-1.5 w-1.5 rounded-full ${TYPE_STYLE[it.type].dot} ${
-                          it.cancelled || it.done ? 'opacity-30' : ''
-                        }`}
+                        style={{ backgroundColor: colorOf(it) }}
+                        className={`h-1.5 w-1.5 rounded-full ${it.cancelled || it.done ? 'opacity-30' : ''}`}
                       />
                     ))}
                   </div>
@@ -451,9 +505,10 @@ export default function CalendarBoard() {
                     {list.slice(0, 3).map((it) => (
                       <div
                         key={it.key}
-                        className={`truncate rounded border-l-2 px-1 text-[11px] leading-5 ${
-                          TYPE_STYLE[it.type].chip
-                        } ${it.cancelled || it.done ? 'line-through opacity-50' : ''}`}
+                        style={chipStyle(it)}
+                        className={`truncate rounded border-l-2 px-1 text-[11px] leading-5 text-text ${
+                          it.cancelled || it.done ? 'line-through opacity-50' : ''
+                        }`}
                       >
                         {it.start && <span className="mr-1 text-muted">{it.start}</span>}
                         {it.title}
@@ -523,9 +578,10 @@ export default function CalendarBoard() {
                     {loose.map((it) => (
                       <div
                         key={it.key}
-                        className={`truncate rounded border-l-2 px-1 text-[10px] leading-4 ${
-                          TYPE_STYLE[it.type].chip
-                        } ${it.cancelled || it.done ? 'line-through opacity-50' : ''}`}
+                        style={chipStyle(it)}
+                        className={`truncate rounded border-l-2 px-1 text-[10px] leading-4 text-text ${
+                          it.cancelled || it.done ? 'line-through opacity-50' : ''
+                        }`}
                       >
                         {it.start && <span className="mr-1 text-muted">{it.start}</span>}
                         {it.title}
@@ -563,10 +619,11 @@ export default function CalendarBoard() {
                         <div
                           key={b.key}
                           title={`${timeText(b)} ${b.title}`}
-                          className={`absolute overflow-hidden rounded-md border-l-2 px-1 py-0.5 text-[11px] leading-tight ${
-                            TYPE_STYLE[b.type].chip
-                          } ${b.cancelled || b.done ? 'line-through opacity-50' : ''}`}
+                          className={`absolute overflow-hidden rounded-md border-l-2 px-1 py-0.5 text-[11px] leading-tight text-text ${
+                            b.cancelled || b.done ? 'line-through opacity-50' : ''
+                          }`}
                           style={{
+                            ...chipStyle(b),
                             top,
                             height,
                             left: `calc(${(b.lane / b.lanes) * 100}% + 1px)`,
@@ -622,7 +679,11 @@ export default function CalendarBoard() {
                   key={it.key}
                   className="flex items-center gap-3 rounded-xl border border-border bg-surface/40 px-4 py-2.5"
                 >
-                  <span className={`h-2 w-2 shrink-0 rounded-full ${TYPE_STYLE[it.type].dot}`} />
+                  {it.labelSlot ? (
+                    <LabelSwatch slot={it.labelSlot} size={10} />
+                  ) : (
+                    <span className={`h-2 w-2 shrink-0 rounded-full ${TYPE_STYLE[it.type].dot}`} />
+                  )}
                   <span className="w-24 shrink-0 text-xs tabular-nums text-muted">{timeText(it)}</span>
                   <div className="min-w-0 flex-1">
                     <p
@@ -632,7 +693,12 @@ export default function CalendarBoard() {
                     >
                       {it.title}
                     </p>
-                    {it.location && <p className="truncate text-xs text-muted">{it.location}</p>}
+                    {(it.location || it.labelSlot) && (
+                      <div className="flex flex-wrap items-center gap-x-3 text-xs text-muted">
+                        {it.location && <span className="truncate">{it.location}</span>}
+                        {it.labelSlot && <span className="truncate">{nameOf(it.labelSlot)}</span>}
+                      </div>
+                    )}
                   </div>
                   {it.cancelled && <span className="shrink-0 text-xs text-muted">休講</span>}
                   {it.overdue && <span className="shrink-0 text-xs text-red-500">期限切れ</span>}

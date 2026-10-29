@@ -9,19 +9,26 @@ import {
   startOfWeek,
   ymd,
 } from '@/lib/routine';
-import RoutineForm from './RoutineForm';
 import { COPY } from '@/lib/copy';
+import { labelColor, useLabels } from '@/lib/labels';
+import { LabelPicker, LabelTag } from './LabelUI';
+import RoutineForm from './RoutineForm';
 
 type Log = { routine_id: string; log_date: string };
+type RoutineRow = Routine & { label_slot: number | null };
+
+const linkBtn = 'text-xs text-muted underline underline-offset-4 hover:text-text';
 
 export default function RoutineBoard() {
   const [supabase] = useState(() => createClient());
-  const [routines, setRoutines] = useState<Routine[]>([]);
+  const { nameOf } = useLabels();
+  const [routines, setRoutines] = useState<RoutineRow[]>([]);
   const [logs, setLogs] = useState<Log[]>([]);
   const [weekOffset, setWeekOffset] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
+  const [pickerId, setPickerId] = useState<string | null>(null);
 
   const today = useMemo(() => {
     const n = new Date();
@@ -55,10 +62,12 @@ export default function RoutineBoard() {
   const loadRoutines = useCallback(async () => {
     const { data, error } = await supabase
       .from('routine_tasks')
-      .select('id,title,recurrence,weekdays,month_mode,month_days,nth_week,clamp_to_month_end,is_active')
+      .select(
+        'id,title,recurrence,weekdays,month_mode,month_days,nth_week,clamp_to_month_end,is_active,label_slot'
+      )
       .order('created_at', { ascending: true });
     if (error) setError('定期タスクの読み込みに失敗しました。');
-    else setRoutines(data as Routine[]);
+    else setRoutines(data as RoutineRow[]);
   }, [supabase]);
 
   const loadLogs = useCallback(async () => {
@@ -101,6 +110,15 @@ export default function RoutineBoard() {
     }
   }
 
+  async function changeLabel(id: string, slot: number | null) {
+    setRoutines((prev) => prev.map((x) => (x.id === id ? { ...x, label_slot: slot } : x)));
+    const { error } = await supabase.from('routine_tasks').update({ label_slot: slot }).eq('id', id);
+    if (error) {
+      setError('ラベルの変更に失敗しました。');
+      loadRoutines();
+    }
+  }
+
   async function removeRoutine(r: Routine) {
     if (!window.confirm(`「${r.title}」を削除する? 記録も一緒に消えるよ。`)) return;
     const { error } = await supabase.from('routine_tasks').delete().eq('id', r.id);
@@ -125,7 +143,7 @@ export default function RoutineBoard() {
         </h3>
         {todays.length === 0 ? (
           <p className="rounded-xl border border-dashed border-border p-4 text-sm text-muted">
-                        {COPY.routines.emptyToday}
+            {COPY.routines.emptyToday}
           </p>
         ) : (
           <ul className="space-y-2">
@@ -134,6 +152,7 @@ export default function RoutineBoard() {
               return (
                 <li
                   key={r.id}
+                  style={r.label_slot ? { borderLeft: `3px solid ${labelColor(r.label_slot)}` } : undefined}
                   className={`flex items-center gap-3 rounded-xl border border-border bg-surface px-4 py-3 ${
                     done ? 'opacity-60' : ''
                   }`}
@@ -146,6 +165,7 @@ export default function RoutineBoard() {
                     }`}
                   />
                   <p className={`min-w-0 flex-1 truncate text-sm ${done ? 'line-through' : ''}`}>{r.title}</p>
+                  {r.label_slot && <LabelTag slot={r.label_slot} name={nameOf(r.label_slot)} />}
                 </li>
               );
             })}
@@ -181,7 +201,7 @@ export default function RoutineBoard() {
 
         {active.length === 0 && (
           <p className="rounded-xl border border-dashed border-border p-4 text-sm text-muted">
-                        {COPY.routines.emptyAll}
+            {COPY.routines.emptyAll}
           </p>
         )}
 
@@ -197,24 +217,40 @@ export default function RoutineBoard() {
             });
 
             return (
-              <li key={r.id} className="space-y-3 rounded-xl border border-border bg-surface p-4">
+              <li
+                key={r.id}
+                style={r.label_slot ? { borderLeft: `3px solid ${labelColor(r.label_slot)}` } : undefined}
+                className="space-y-3 rounded-xl border border-border bg-surface p-4"
+              >
                 <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
+                  <div className="min-w-0 space-y-0.5">
                     <p className="truncate text-sm">{r.title}</p>
                     <p className="text-xs text-muted">{describeRoutine(r)}</p>
+                    {r.label_slot && <LabelTag slot={r.label_slot} name={nameOf(r.label_slot)} />}
                   </div>
                   <div className="flex shrink-0 items-center gap-3">
                     <span className="text-xs text-muted">
                       {done}/{due}
                     </span>
                     <button
-                      onClick={() => removeRoutine(r)}
-                      className="text-xs text-muted underline underline-offset-4 hover:text-text"
+                      onClick={() => setPickerId(pickerId === r.id ? null : r.id)}
+                      className={linkBtn}
                     >
+                      ラベル
+                    </button>
+                    <button onClick={() => removeRoutine(r)} className={linkBtn}>
                       削除
                     </button>
                   </div>
                 </div>
+
+                {pickerId === r.id && (
+                  <LabelPicker
+                    value={r.label_slot ?? null}
+                    onChange={(v) => changeLabel(r.id, v)}
+                    nameOf={nameOf}
+                  />
+                )}
 
                 <div className="grid grid-cols-7 gap-1">
                   {days.map((d) => {

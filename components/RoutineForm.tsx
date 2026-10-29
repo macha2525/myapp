@@ -2,6 +2,8 @@
 import { useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { WEEKDAY_LABELS } from '@/lib/routine';
+import { useLabels } from '@/lib/labels';
+import { LabelPicker } from './LabelUI';
 
 type Props = { onCreated: () => void };
 
@@ -26,6 +28,8 @@ export default function RoutineForm({ onCreated }: Props) {
   const [nthWeekday, setNthWeekday] = useState(1);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+    const { nameOf } = useLabels();
+  const [labelSlot, setLabelSlot] = useState<number | null>(null);
 
   function toggle(list: number[], v: number) {
     return list.includes(v) ? list.filter((x) => x !== v) : [...list, v];
@@ -52,14 +56,14 @@ export default function RoutineForm({ onCreated }: Props) {
 
     setSaving(true);
     setError(null);
-    const { error } = await supabase.from('routine_tasks').insert(payload);
-    setSaving(false);
+    const { error } = await supabase.from('routine_tasks').insert({ ...payload, label_slot: labelSlot });
 
     if (error) return setError('追加に失敗しました。');
 
     setTitle('');
     setWeekdays([]);
     setMonthDays([]);
+    setLabelSlot(null);
     onCreated();
   }
 
@@ -158,6 +162,7 @@ export default function RoutineForm({ onCreated }: Props) {
         </div>
       )}
 
+     <LabelPicker value={labelSlot} onChange={setLabelSlot} nameOf={nameOf} />
       {error && <p className="text-sm text-red-500">{error}</p>}
 
       <button

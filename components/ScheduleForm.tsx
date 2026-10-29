@@ -2,6 +2,8 @@
 import { useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { WEEKDAY_LABELS, ymd } from '@/lib/routine';
+import { useLabels } from '@/lib/labels';
+import { LabelPicker } from './LabelUI';
 
 type Props = { onCreated: () => void };
 
@@ -39,6 +41,8 @@ export default function ScheduleForm({ onCreated }: Props) {
 
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const { nameOf } = useLabels();
+  const [labelSlot, setLabelSlot] = useState<number | null>(null);
 
   function toggleDay(w: number) {
     setWeekdays((prev) => (prev.includes(w) ? prev.filter((x) => x !== w) : [...prev, w]));
@@ -88,7 +92,7 @@ export default function ScheduleForm({ onCreated }: Props) {
 
     setSaving(true);
     setError(null);
-    const { error } = await supabase.from('schedules').insert(payload);
+    const { error } = await supabase.from('schedules').insert({ ...payload, label_slot: labelSlot });
     setSaving(false);
 
     if (error) return setError('追加に失敗しました。');
@@ -98,6 +102,7 @@ export default function ScheduleForm({ onCreated }: Props) {
     setStartTime('');
     setEndTime('');
     setWeekdays([]);
+    setLabelSlot(null);
     onCreated();
   }
 
@@ -170,6 +175,7 @@ export default function ScheduleForm({ onCreated }: Props) {
         </div>
       )}
 
+      <LabelPicker value={labelSlot} onChange={setLabelSlot} nameOf={nameOf} />
       {error && <p className="text-sm text-red-500">{error}</p>}
 
       <button

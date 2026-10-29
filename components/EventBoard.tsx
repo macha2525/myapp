@@ -9,9 +9,14 @@ import {
   hhmm,
   occurrencesInRange,
 } from '@/lib/schedule';
+import { labelColor, useLabels } from '@/lib/labels';
+import { LabelPicker, LabelTag } from './LabelUI';
 import ScheduleForm from './ScheduleForm';
 
+type ScheduleRow = Schedule & { label_slot: number | null };
+
 const DAYS_AHEAD = 7;
+const linkBtn = 'shrink-0 text-xs text-muted underline underline-offset-4 hover:text-text';
 
 function timeLabel(o: Occurrence) {
   if (o.allDay) return '終日';
@@ -31,11 +36,13 @@ function describeSchedule(s: Schedule) {
 
 export default function EventBoard() {
   const [supabase] = useState(() => createClient());
-  const [schedules, setSchedules] = useState<Schedule[]>([]);
+  const { nameOf } = useLabels();
+  const [schedules, setSchedules] = useState<ScheduleRow[]>([]);
   const [exceptions, setExceptions] = useState<ScheduleException[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
+  const [pickerId, setPickerId] = useState<string | null>(null);
 
   const today = useMemo(() => {
     const n = new Date();
@@ -56,7 +63,7 @@ export default function EventBoard() {
     const [s, e] = await Promise.all([
       supabase
         .from('schedules')
-        .select('id,title,location,kind,all_day,start_date,end_date,weekdays,start_time,end_time')
+        .select('id,title,location,kind,all_day,start_date,end_date,weekdays,start_time,end_time,label_slot')
         .order('created_at', { ascending: true }),
       supabase
         .from('schedule_exceptions')
@@ -65,7 +72,7 @@ export default function EventBoard() {
     if (s.error || e.error) {
       setError('予定の読み込みに失敗しました。');
     } else {
-      setSchedules(s.data as Schedule[]);
+      setSchedules(s.data as ScheduleRow[]);
       setExceptions(e.data as ScheduleException[]);
       setError(null);
     }
@@ -79,6 +86,11 @@ export default function EventBoard() {
   const occurrences = useMemo(
     () => occurrencesInRange(schedules, exceptions, days[0], days[days.length - 1]),
     [schedules, exceptions, days]
+  );
+
+  const slotById = useMemo(
+    () => new Map(schedules.map((s) => [s.id, s.label_slot] as const)),
+    [schedules]
   );
 
   async function setCancelled(o: Occurrence, cancel: boolean) {
@@ -96,6 +108,15 @@ export default function EventBoard() {
           .eq('occurrence_date', o.date);
     if (error) setError('更新に失敗しました。');
     else load();
+  }
+
+  async function changeLabel(id: string, slot: number | null) {
+    setSchedules((prev) => prev.map((x) => (x.id === id ? { ...x, label_slot: slot } : x)));
+    const { error } = await supabase.from('schedules').update({ label_slot: slot }).eq('id', id);
+    if (error) {
+      setError('ラベルの変更に失敗しました。');
+      load();
+    }
   }
 
   async function removeSchedule(s: Schedule) {
@@ -139,31 +160,37 @@ export default function EventBoard() {
               </p>
               {list.length === 0 && <p className="px-1 text-xs text-muted">予定なし</p>}
               <ul className="space-y-2">
-                {list.map((o) => (
-                  <li
-                    key={o.key}
-                    className={`flex items-center gap-3 rounded-xl border border-border bg-surface px-4 py-3 ${
-                      o.cancelled ? 'opacity-50' : ''
-                    }`}
-                  >
-                    <span className="w-24 shrink-0 text-xs tabular-nums text-muted">{timeLabel(o)}</span>
-                    <div className="min-w-0 flex-1">
-                      <p className={`truncate text-sm ${o.cancelled ? 'line-through' : ''}`}>
-                        {o.title}
-                        {o.cancelled && <span className="ml-2 text-xs no-underline">休講</span>}
-                      </p>
-                      {o.location && <p className="truncate text-xs text-muted">{o.location}</p>}
-                    </div>
-                    {o.kind === 'weekly' && (
-                      <button
-                        onClick={() => setCancelled(o, !o.cancelled)}
-                        className="shrink-0 text-xs text-muted underline underline-offset-4 hover:text-text"
-                      >
-                        {o.cancelled ? '休講を取り消す' : '休講にする'}
-                      </button>
-                    )}
-                  </li>
-                ))}
+                {list.map((o) => {
+                  const slot = slotById.get(o.scheduleId) ?? null;
+                  return (
+                    <li
+                      key={o.key}
+                      style={slot ? { borderLeft: `3px solid ${labelColor(slot)}` } : undefined}
+                      className={`flex items-center gap-3 rounded-xl border border-border bg-surface px-4 py-3 ${
+                        o.cancelled ? 'opacity-50' : ''
+                      }`}
+                    >
+                      <span className="w-24 shrink-0 text-xs tabular-nums text-muted">{timeLabel(o)}</span>
+                      <div className="min-w-0 flex-1">
+                        <p className={`truncate text-sm ${o.cancelled ? 'line-through' : ''}`}>
+                          {o.title}
+                          {o.cancelled && <span className="ml-2 text-xs no-underline">休講</span>}
+                        </p>
+                        {(o.location || slot) && (
+                          <div className="flex flex-wrap items-center gap-x-3 text-xs text-muted">
+                            {o.location && <span className="truncate">{o.location}</span>}
+                            {slot && <LabelTag slot={slot} name={nameOf(slot)} />}
+                          </div>
+                        )}
+                      </div>
+                      {o.kind === 'weekly' && (
+                        <button onClick={() => setCancelled(o, !o.cancelled)} className={linkBtn}>
+                          {o.cancelled ? '休講を取り消す' : '休講にする'}
+                        </button>
+                      )}
+                    </li>
+                  );
+                })}
               </ul>
             </div>
           );
@@ -187,18 +214,36 @@ export default function EventBoard() {
             {schedules.map((s) => (
               <li
                 key={s.id}
-                className="flex items-start justify-between gap-3 rounded-xl border border-border bg-surface px-4 py-3"
+                style={s.label_slot ? { borderLeft: `3px solid ${labelColor(s.label_slot)}` } : undefined}
+                className="rounded-xl border border-border bg-surface px-4 py-3"
               >
-                <div className="min-w-0">
-                  <p className="truncate text-sm">{s.title}</p>
-                  <p className="text-xs text-muted">{describeSchedule(s)}</p>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 space-y-0.5">
+                    <p className="truncate text-sm">{s.title}</p>
+                    <p className="text-xs text-muted">{describeSchedule(s)}</p>
+                    {s.label_slot && <LabelTag slot={s.label_slot} name={nameOf(s.label_slot)} />}
+                  </div>
+                  <div className="flex shrink-0 items-center gap-3">
+                    <button
+                      onClick={() => setPickerId(pickerId === s.id ? null : s.id)}
+                      className={linkBtn}
+                    >
+                      ラベル
+                    </button>
+                    <button onClick={() => removeSchedule(s)} className={linkBtn}>
+                      削除
+                    </button>
+                  </div>
                 </div>
-                <button
-                  onClick={() => removeSchedule(s)}
-                  className="shrink-0 text-xs text-muted underline underline-offset-4 hover:text-text"
-                >
-                  削除
-                </button>
+                {pickerId === s.id && (
+                  <div className="mt-3">
+                    <LabelPicker
+                      value={s.label_slot ?? null}
+                      onChange={(v) => changeLabel(s.id, v)}
+                      nameOf={nameOf}
+                    />
+                  </div>
+                )}
               </li>
             ))}
           </ul>
